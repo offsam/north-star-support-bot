@@ -1,30 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import {
-  useState,
-  useRef,
-  useEffect,
-  useCallback,
-  forwardRef,
-  useImperativeHandle,
-} from "react";
+import { useState, useRef, useEffect } from "react";
 import { getBotResponse, IDLE } from "@/lib/chatbot";
-import { DEMO_SCRIPT } from "@/data/demo-script";
 import type { IntentState, Message } from "@/types/chat";
 
 const TYPING_DELAY_MS = 2000;
 const WELCOME_MESSAGE =
   "Welcome to North Star Support Bot! How can I help you today?";
-
-export type ChatBotHandle = {
-  runDemo: () => Promise<void>;
-  stopDemo: () => void;
-};
-
-function delay(ms: number) {
-  return new Promise<void>((resolve) => setTimeout(resolve, ms));
-}
 
 function UserAvatar() {
   return (
@@ -107,22 +90,15 @@ function MessageBubble({ msg }: { msg: Message }) {
   );
 }
 
-const ChatBot = forwardRef<ChatBotHandle>(function ChatBot(_, ref) {
+export default function ChatBot() {
   const [intentState, setIntentState] = useState<IntentState>(IDLE);
   const [messages, setMessages] = useState<Message[]>([
     { sender: "bot", text: WELCOME_MESSAGE },
   ]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const [isDemoRunning, setIsDemoRunning] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
-  const intentRef = useRef<IntentState>(IDLE);
-  const demoAbortRef = useRef(false);
-
-  useEffect(() => {
-    intentRef.current = intentState;
-  }, [intentState]);
 
   useEffect(() => {
     const container = chatContainerRef.current;
@@ -131,89 +107,21 @@ const ChatBot = forwardRef<ChatBotHandle>(function ChatBot(_, ref) {
     }
   }, [messages, isTyping]);
 
-  const deliverBotReply = useCallback(
-    (reply: string, nextIntent: IntentState) =>
-      new Promise<void>((resolve) => {
-        setIsTyping(true);
-        setTimeout(() => {
-          setMessages((prev) => [...prev, { sender: "bot", text: reply }]);
-          setIntentState(nextIntent);
-          intentRef.current = nextIntent;
-          setIsTyping(false);
-          resolve();
-        }, TYPING_DELAY_MS);
-      }),
-    []
-  );
-
-  const submitMessage = useCallback(
-    async (text: string) => {
-      const result = getBotResponse(text, intentRef.current);
-      setMessages((prev) => [...prev, { sender: "user", text }]);
-      setInput("");
-      await deliverBotReply(result.message, result.nextIntent);
-    },
-    [deliverBotReply]
-  );
-
-  const typeAndSend = useCallback(
-    async (text: string, speedMs: number) => {
-      setInput("");
-      for (let i = 0; i < text.length; i++) {
-        if (demoAbortRef.current) return;
-        setInput(text.slice(0, i + 1));
-        await delay(speedMs);
-      }
-      if (demoAbortRef.current) return;
-      await delay(400);
-      await submitMessage(text);
-    },
-    [submitMessage]
-  );
-
-  const resetChat = useCallback(() => {
-    setMessages([{ sender: "bot", text: WELCOME_MESSAGE }]);
-    setIntentState(IDLE);
-    intentRef.current = IDLE;
-    setInput("");
-    setIsTyping(false);
-  }, []);
-
-  const runDemo = useCallback(async () => {
-    demoAbortRef.current = false;
-    setIsDemoRunning(true);
-    resetChat();
-    await delay(1500);
-
-    for (const step of DEMO_SCRIPT) {
-      if (demoAbortRef.current) break;
-
-      await delay(step.pauseBeforeMs ?? 3000);
-      if (demoAbortRef.current) break;
-
-      await typeAndSend(step.text, step.typingSpeedMs ?? 50);
-      if (demoAbortRef.current) break;
-
-      await delay(step.pauseAfterMs ?? 2000);
-    }
-
-    setIsDemoRunning(false);
-    setInput("");
-  }, [resetChat, typeAndSend]);
-
-  const stopDemo = useCallback(() => {
-    demoAbortRef.current = true;
-    setIsDemoRunning(false);
-    setIsTyping(false);
-    setInput("");
-  }, []);
-
-  useImperativeHandle(ref, () => ({ runDemo, stopDemo }), [runDemo, stopDemo]);
-
   function handleSend() {
     const trimmed = input.trim();
-    if (!trimmed || isTyping || isDemoRunning) return;
-    void submitMessage(trimmed);
+    if (!trimmed || isTyping) return;
+
+    const result = getBotResponse(trimmed, intentState);
+
+    setMessages((prev) => [...prev, { sender: "user", text: trimmed }]);
+    setInput("");
+    setIsTyping(true);
+
+    setTimeout(() => {
+      setMessages((prev) => [...prev, { sender: "bot", text: result.message }]);
+      setIntentState(result.nextIntent);
+      setIsTyping(false);
+    }, TYPING_DELAY_MS);
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -222,8 +130,6 @@ const ChatBot = forwardRef<ChatBotHandle>(function ChatBot(_, ref) {
       handleSend();
     }
   }
-
-  const inputDisabled = isTyping || isDemoRunning;
 
   return (
     <div className="flex w-full max-w-md flex-col overflow-hidden rounded-3xl border border-white/60 bg-white/90 shadow-2xl shadow-emerald-900/10 backdrop-blur-sm">
@@ -244,7 +150,7 @@ const ChatBot = forwardRef<ChatBotHandle>(function ChatBot(_, ref) {
             </p>
           </div>
           <div className="rounded-full bg-white/15 px-2.5 py-1 text-xs font-medium text-emerald-50">
-            {isDemoRunning ? "Demo" : "Online"}
+            Online
           </div>
         </div>
       </header>
@@ -267,19 +173,17 @@ const ChatBot = forwardRef<ChatBotHandle>(function ChatBot(_, ref) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            disabled={inputDisabled}
+            disabled={isTyping}
             placeholder={
-              isDemoRunning
-                ? "Demo in progress..."
-                : isTyping
-                  ? "Jordan is typing..."
-                  : "Ask about orders, gear, returns..."
+              isTyping
+                ? "Jordan is typing..."
+                : "Ask about orders, gear, returns..."
             }
             className="flex-1 bg-transparent px-3 py-2 text-sm text-slate-700 placeholder-slate-400 focus:outline-none disabled:cursor-not-allowed disabled:text-slate-400"
           />
           <button
             onClick={handleSend}
-            disabled={inputDisabled || !input.trim()}
+            disabled={isTyping || !input.trim()}
             aria-label="Send message"
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-600 to-green-700 text-white shadow-md transition-all hover:from-emerald-500 hover:to-green-600 hover:shadow-lg active:scale-95 disabled:cursor-not-allowed disabled:from-emerald-300 disabled:to-green-400 disabled:shadow-none"
           >
@@ -305,6 +209,4 @@ const ChatBot = forwardRef<ChatBotHandle>(function ChatBot(_, ref) {
       </div>
     </div>
   );
-});
-
-export default ChatBot;
+}

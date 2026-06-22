@@ -1,22 +1,6 @@
-"use client";
-
-import { useRef, useState } from "react";
-import ChatBot, { type ChatBotHandle } from "@/components/ChatBot";
+import ChatBot from "@/components/ChatBot";
 
 export default function Home() {
-  const chatRef = useRef<ChatBotHandle>(null);
-  const [demoActive, setDemoActive] = useState(false);
-
-  function handleDemo() {
-    if (demoActive) {
-      chatRef.current?.stopDemo();
-      setDemoActive(false);
-    } else {
-      setDemoActive(true);
-      void chatRef.current?.runDemo().then(() => setDemoActive(false));
-    }
-  }
-
   return (
     <main className="relative min-h-screen bg-gradient-to-br from-emerald-950 via-green-900 to-slate-900">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -30,24 +14,7 @@ export default function Home() {
           <p className="mb-3 text-center text-sm font-medium tracking-wide text-emerald-200/80">
             Your trail-ready support team
           </p>
-          <ChatBot ref={chatRef} />
-          <div className="mt-4 pl-1">
-            <button
-              onClick={handleDemo}
-              className={`rounded-full px-6 py-2.5 text-sm font-semibold tracking-wide shadow-lg transition-all active:scale-95 ${
-                demoActive
-                  ? "bg-red-600/90 text-white hover:bg-red-500"
-                  : "bg-white/10 text-emerald-100 ring-1 ring-white/20 hover:bg-white/20 hover:text-white"
-              }`}
-            >
-              {demoActive ? "Stop demo" : "Run demo"}
-            </button>
-            <p className="mt-2 text-xs text-emerald-200/50">
-              {demoActive
-                ? "Auto walkthrough of all scenarios (~2 min)"
-                : "Play an automated demo of all chatbot flows"}
-            </p>
-          </div>
+          <ChatBot />
         </div>
       </section>
     </main>
